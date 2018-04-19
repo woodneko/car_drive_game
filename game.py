@@ -12,7 +12,12 @@ BADDIEMINSPEED = 8
 BADDIEMAXSPEED = 8
 ADDNEWBADDIERATE = 6
 PLAYERMOVERATE = 5
+acc_scale = 0.5
+acc = 0
+brake_signal = 0
+car_speed = 0
 count=3
+baddies_acc=0.2;
 
 def terminate():
     pygame.quit()
@@ -48,12 +53,11 @@ pygame.display.set_caption('car race')
 pygame.mouse.set_visible(False)
 
 # fonts
-font = pygame.font.SysFont(None, 30)
+font = pygame.font.SysFont(None, 20)
 
 # sounds
-gameOverSound = pygame.mixer.Sound('music/crash.wav')
-pygame.mixer.music.load('music/car.wav')
-laugh = pygame.mixer.Sound('music/laugh.wav')
+#gameOverSound = pygame.mixer.Sound('music/crash.wav')
+#laugh = pygame.mixer.Sound('music/laugh.wav')
 
 
 # images
@@ -73,22 +77,33 @@ drawText('And Enjoy', font, windowSurface, (WINDOWWIDTH / 3), (WINDOWHEIGHT / 3)
 pygame.display.update()
 waitForPlayerToPressKey()
 zero=0
-if not os.path.exists("data/save.dat"):
-    f=open("data/save.dat",'w')
-    f.write(str(zero))
-    f.close()   
-v=open("data/save.dat",'r')
-topScore = int(v.readline())
-v.close()
+accfile=0
+speedfile=0
+record_flag=False
+
+# init record file
+if not os.path.exists("data/accelerate.dat"):
+    accfile=open("data/accelerate.dat",'w')
+    accfile.write(str(zero))
+    accfile.close()   
+else:
+    accfile=open("data/accelerate.dat",'r+')
+
+if not os.path.exists("data/speed.dat"):
+    speedfile=open("data/speed.dat",'w')
+    speedfile.write(str(zero))
+    speedfile.close()   
+else:
+    speedfile=open("data/speed.dat",'r+')
+
 while (count>0):
     # start of the game
     baddies = []
     score = 0
-    playerRect.topleft = (WINDOWWIDTH / 2, WINDOWHEIGHT - 50)
+    playerRect.topleft = (WINDOWWIDTH / 2, WINDOWHEIGHT - 200)
     moveLeft = moveRight = moveUp = moveDown = False
     reverseCheat = slowCheat = False
     baddieAddCounter = 0
-    pygame.mixer.music.play(-1, 0.0)
 
     while True: # the game loop
         score += 1 # increase score
@@ -96,6 +111,8 @@ while (count>0):
         for event in pygame.event.get():
             
             if event.type == QUIT:
+                accfile.close()
+                speedfile.close()
                 terminate()
 
             if event.type == KEYDOWN:
@@ -103,16 +120,23 @@ while (count>0):
                     reverseCheat = True
                 if event.key == ord('x'):
                     slowCheat = True
+                if event.key == ord('r'):
+                    record_flag = True
                 if event.key == K_LEFT or event.key == ord('a'):
                     moveRight = False
                     moveLeft = True
+                if event.key == ord('b'):
+                    brake_signal = 1
+                    car_speed = 0
                 if event.key == K_RIGHT or event.key == ord('d'):
                     moveLeft = False
                     moveRight = True
                 if event.key == K_UP or event.key == ord('w'):
+                    acc = acc_scale
                     moveDown = False
                     moveUp = True
                 if event.key == K_DOWN or event.key == ord('s'):
+                    acc = -acc_scale
                     moveUp = False
                     moveDown = True
 
@@ -123,8 +147,16 @@ while (count>0):
                 if event.key == ord('x'):
                     slowCheat = False
                     score = 0
+                if event.key == ord('r'):
+                    record_flag = False
+                if event.key == K_UP or event.key == ord('w'):
+                    acc = 0
+                if event.key == K_DOWN or event.key == ord('s'):
+                    acc = 0
                 if event.key == K_ESCAPE:
-                        terminate()
+                   accfile.close()
+                   speedfile.close()
+                   terminate()
             
 
                 if event.key == K_LEFT or event.key == ord('a'):
@@ -143,22 +175,13 @@ while (count>0):
             baddieAddCounter += 1
         if baddieAddCounter == ADDNEWBADDIERATE:
             baddieAddCounter = 0
-            baddieSize =30 
-            newBaddie = {'rect': pygame.Rect(random.randint(140, 485), 0 - baddieSize, 23, 47),
-                        'speed': random.randint(BADDIEMINSPEED, BADDIEMAXSPEED),
-                        'surface':pygame.transform.scale(random.choice(sample), (23, 47)),
-                        }
-            baddies.append(newBaddie)
-            sideLeft= {'rect': pygame.Rect(0,0,126,600),
-                       'speed': random.randint(BADDIEMINSPEED, BADDIEMAXSPEED),
-                       'surface':pygame.transform.scale(wallLeft, (126, 599)),
-                       }
-            baddies.append(sideLeft)
-            sideRight= {'rect': pygame.Rect(497,0,303,600),
-                       'speed': random.randint(BADDIEMINSPEED, BADDIEMAXSPEED),
-                       'surface':pygame.transform.scale(wallRight, (303, 599)),
-                       }
-            baddies.append(sideRight)
+            if len(baddies)<3:
+                baddieSize =30 
+                newBaddie = {'rect': pygame.Rect(random.randint(140, 485), 0 - baddieSize, 23, 47),
+                            'speed': random.randint(BADDIEMINSPEED, BADDIEMAXSPEED),
+                            'surface':pygame.transform.scale(random.choice(sample), (23, 47)),
+                            }
+                baddies.append(newBaddie)
             
             
 
@@ -168,19 +191,26 @@ while (count>0):
         if moveRight and playerRect.right < WINDOWWIDTH:
             playerRect.move_ip(PLAYERMOVERATE, 0)
         if moveUp and playerRect.top > 0:
-            playerRect.move_ip(0, -1 * PLAYERMOVERATE)
+            car_speed += acc  
         if moveDown and playerRect.bottom < WINDOWHEIGHT:
-            playerRect.move_ip(0, PLAYERMOVERATE)
+            car_speed += acc  
+            if car_speed < -10:
+                car_speed = -10
         
         for b in baddies:
             if not reverseCheat and not slowCheat:
-                b['rect'].move_ip(0, b['speed'])
+                if b['speed']>baddies_acc:
+                    b['speed'] -= baddies_acc 
+                else:
+                    b['speed'] = 0 
+                b['rect'].move_ip(0, car_speed-b['speed'])
             elif reverseCheat:
                 b['rect'].move_ip(0, -5)
             elif slowCheat:
                 b['rect'].move_ip(0, 1)
 
          
+        # baddies out of window
         for b in baddies[:]:
             if b['rect'].top > WINDOWHEIGHT:
                 baddies.remove(b)
@@ -189,9 +219,8 @@ while (count>0):
         windowSurface.fill(BACKGROUNDCOLOR)
 
         # Draw the score and top score.
-        drawText('Score: %s' % (score), font, windowSurface, 128, 0)
-        drawText('Top Score: %s' % (topScore), font, windowSurface,128, 20)
-        drawText('Rest Life: %s' % (count), font, windowSurface,128, 40)
+        drawText('accelerate: %s' % (acc), font, windowSurface, 128, 0)
+        drawText('speed: %s' % (car_speed), font, windowSurface,128, 20)
         
         windowSurface.blit(playerImage, playerRect)
 
@@ -199,30 +228,45 @@ while (count>0):
         for b in baddies:
             windowSurface.blit(b['surface'], b['rect'])
 
+        sideLeft= {'rect': pygame.Rect(0,0,126,600),
+                   'speed': random.randint(BADDIEMINSPEED, BADDIEMAXSPEED),
+                   'surface':pygame.transform.scale(wallLeft, (126, 599)),
+                   }
+        sideRight= {'rect': pygame.Rect(497,0,303,600),
+                   'speed': random.randint(BADDIEMINSPEED, BADDIEMAXSPEED),
+                   'surface':pygame.transform.scale(wallRight, (303, 599)),
+                   }
+        windowSurface.blit(sideLeft['surface'], sideLeft['rect'])
+        windowSurface.blit(sideRight['surface'], sideRight['rect'])
+        
         pygame.display.update()
 
+        # add code record speed and accelerate
         # Check if any of the car have hit the player.
         if playerHasHitBaddie(playerRect, baddies):
-            if score > topScore:
-                g=open("data/save.dat",'w')
-                g.write(str(score))
-                g.close()
-                topScore = score
+            accfile.close()
+            speedfile.close()
+            terminate()
             break
+
+        if record_flag:
+            accfile.write(str(acc))
+            accfile.write(" ")
+            speedfile.write(str(car_speed))
+            speedfile.write(" ")
 
         mainClock.tick(FPS)
 
     # "Game Over" screen.
-    pygame.mixer.music.stop()
     count=count-1
-    gameOverSound.play()
+    #gameOverSound.play()
     time.sleep(1)
     if (count==0):
-     laugh.play()
+     #laugh.play()
      drawText('Game over', font, windowSurface, (WINDOWWIDTH / 3), (WINDOWHEIGHT / 3))
      drawText('Press any key to play again.', font, windowSurface, (WINDOWWIDTH / 3) - 80, (WINDOWHEIGHT / 3) + 30)
      pygame.display.update()
      time.sleep(2)
      waitForPlayerToPressKey()
      count=3
-     gameOverSound.stop()
+     #gameOverSound.stop()
