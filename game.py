@@ -104,6 +104,10 @@ while (count>0):
     moveLeft = moveRight = moveUp = moveDown = False
     reverseCheat = slowCheat = False
     baddieAddCounter = 0
+    acc_list = []
+    speed_list = []
+    car_pos = [200, 260, 320]
+    car_cnt = 0
 
     while True: # the game loop
         score += 1 # increase score
@@ -148,6 +152,13 @@ while (count>0):
                     slowCheat = False
                     score = 0
                 if event.key == ord('r'):
+                    if 0 != len(acc_list) and 0 != len(speed_list):
+                        accfile.write(str(acc_list))
+                        speedfile.write(str(speed_list))
+
+                    acc_list = []
+                    speed_list = []
+
                     record_flag = False
                 if event.key == K_UP or event.key == ord('w'):
                     acc = 0
@@ -177,12 +188,12 @@ while (count>0):
             baddieAddCounter = 0
             if len(baddies)<3:
                 baddieSize =30 
-                newBaddie = {'rect': pygame.Rect(random.randint(140, 485), 0 - baddieSize, 23, 47),
+                newBaddie = {'rect': pygame.Rect(car_pos[car_cnt%3], 0 - baddieSize, 23, 47),
                             'speed': random.randint(BADDIEMINSPEED, BADDIEMAXSPEED),
                             'surface':pygame.transform.scale(random.choice(sample), (23, 47)),
                             }
                 baddies.append(newBaddie)
-            
+                car_cnt += 1
             
 
         # Move the player around.
@@ -199,10 +210,14 @@ while (count>0):
         
         for b in baddies:
             if not reverseCheat and not slowCheat:
-                if b['speed']>baddies_acc:
-                    b['speed'] -= baddies_acc 
+                if b['rect'].bottom > 0:
+                    if b['speed']>baddies_acc:
+                        b['speed'] -= baddies_acc 
+                    else:
+                        b['speed'] = 0 
                 else:
-                    b['speed'] = 0 
+                    b['speed'] = BADDIEMINSPEED
+
                 b['rect'].move_ip(0, car_speed-b['speed'])
             elif reverseCheat:
                 b['rect'].move_ip(0, -5)
@@ -221,6 +236,10 @@ while (count>0):
         # Draw the score and top score.
         drawText('accelerate: %s' % (acc), font, windowSurface, 128, 0)
         drawText('speed: %s' % (car_speed), font, windowSurface,128, 20)
+        i=0
+        for b in baddies:
+            drawText('top: %s, speed: %s' % (b['rect'].top, b['speed']), font, windowSurface, 128, 40+i*20 )
+            i += 1
         
         windowSurface.blit(playerImage, playerRect)
 
@@ -250,10 +269,8 @@ while (count>0):
             break
 
         if record_flag:
-            accfile.write(str(acc))
-            accfile.write(" ")
-            speedfile.write(str(car_speed))
-            speedfile.write(" ")
+            acc_list.append(acc)
+            speed_list.append(car_speed)
 
         mainClock.tick(FPS)
 
